@@ -1,25 +1,22 @@
-# BUILDX
-# docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
-#    -t klerith/cron-ticker:latest --push .
-
-# /app /usr /lib
-# FROM --platform=linux/amd64 node:19.2-alpine3.16
-# FROM --platform=$BUILDPLATFORM node:19.2-alpine3.16
-
-FROM node:alpine3.17
-
+FROM node:alpine3.17 as deps
 WORKDIR /app
-
-COPY package*.json ./
-
+COPY package.json ./
 RUN npm install
 
+FROM node:alpine3.17 as builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
 RUN npm run test
 
-RUN rm -rf tests && rm -rf node_modules
-
+FROM node:alpine3.17 as prod-deps
+WORKDIR /app
+COPY package.json ./
 RUN npm install --prod
 
-CMD [ "node", "app.js" ] 
+FROM node:alpine3.17 as runner
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY app.js ./
+COPY tasks/ ./tasks
+CMD [ "node", "app.js" ]
